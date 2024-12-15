@@ -105,10 +105,17 @@ class Sidebar:
                 key="goal_urgency"
             )
             submit = st.form_submit_button("Add Goal")
-            if submit and goal and selected_decision and selected_decision != '':
-                if self.pipeline_service.add_goal(goal, selected_decision, urgency):
-                    st.success("Goal added successfully!")
-                    st.rerun()
+            if submit:
+                if not goal:
+                    st.error("Please enter a goal")
+                elif not decisions:
+                    st.warning("Please add at least one decision before creating a goal")
+                elif selected_decision == '':
+                    st.error("Please select a related decision")
+                else:
+                    if self.pipeline_service.add_goal(goal, selected_decision, urgency):
+                        st.success("Goal added successfully!")
+                        st.rerun()
 
     def _render_task_section(self):
         """Render the task input section"""
