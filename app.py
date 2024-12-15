@@ -14,7 +14,7 @@ def initialize_services():
     pipeline_service = PipelineService(st)
     graph_service = GraphService(pipeline_service)
     graph_visualizer = GraphVisualizer()
-    circle_visualizer = CircleVisualizer()  # Add CircleVisualizer initialization
+    circle_visualizer = CircleVisualizer()
     
     return pipeline_service, graph_service, graph_visualizer, circle_visualizer
 
@@ -23,87 +23,91 @@ def render_main_content(pipeline_service, graph_service, graph_visualizer, circl
     st.title("Decision Pipeline")
     
     # Add tabs for all visualizations and management
-    viz_tab, circles_tab, manage_tab = st.tabs([
+    viz_tab, circles_tab, todos_tab, manage_tab = st.tabs([
         "Pipeline Visualization", 
-        "Item Overview", 
+        "Item Overview",
+        "Todo List",
         "Manage Entries"
     ])
     
     # Pipeline Visualization Tab
     with viz_tab:
-        pipeline_viz = PipelineVisualizer(pipeline_service, graph_service, graph_visualizer)
-        pipeline_viz.render()
-
+        # Add decision selector
+        if 'decisions_df' in st.session_state and not st.session_state.decisions_df.empty:
+            decisions = st.session_state.decisions_df['decision'].tolist()
+            selected_decision = st.selectbox(
+                "Select a decision to visualize",
+                options=decisions
+            )
+            pipeline_viz = PipelineVisualizer(pipeline_service, graph_service)
+            pipeline_viz.render(selected_decision)
+        else:
+            st.info("Add some decisions to visualize the pipeline.")
+    
     # Circles Visualization Tab
     with circles_tab:
-        # Create columns for different item types
-        col1, col2, col3 = st.columns(3)
-        col4, col5 = st.columns(2)
-
-        with col1:
-            st.subheader("Concerns")
-            concerns_data = [
-                {'concern': row['concern'], 'urgency': row['urgency']}
-                for _, row in st.session_state.concerns_df.iterrows()
-            ]
-            if concerns_data:
-                svg_content = circle_visualizer.create_circle_graph(concerns_data, 'concern')
-                if svg_content:
-                    st.components.v1.html(svg_content, height=300)
+        # Create buttons for different item types
+        item_types = {
+            "Concerns": ("concerns_df", "concern"),
+            "Questions": ("questions_df", "question"),
+            "Decisions": ("decisions_df", "decision"),
+            "Goals": ("goals_df", "goal"),
+            "Tasks": ("tasks_df", "task")
+        }
+        
+        # Create columns for buttons
+        cols = st.columns(len(item_types))
+        
+        # Add buttons for each item type
+        for col, (label, (df_name, item_key)) in zip(cols, item_types.items()):
+            with col:
+                if st.button(label):
+                    st.session_state.selected_view = (df_name, item_key)
+                
+        # Display selected visualization
+        if hasattr(st.session_state, 'selected_view') and st.session_state.selected_view is not None:
+            df_name, item_key = st.session_state.selected_view
+            
+            if df_name in st.session_state and not st.session_state[df_name].empty:
+                items_data = [
+                    {item_key: row[item_key], 'urgency': row['urgency']}
+                    for _, row in st.session_state[df_name].iterrows()
+                ]
+                if items_data:
+                    svg_content = circle_visualizer.create_circle_graph(items_data, item_key)
+                    if svg_content:
+                        st.components.v1.html(svg_content, height=600)
             else:
-                st.info("No concerns added yet")
+                st.info(f"No {item_key}s added yet")
+        else:
+            st.info("Select an item type to view its visualization")
 
-        with col2:
-            st.subheader("Questions")
-            questions_data = [
-                {'question': row['question'], 'urgency': row['urgency']}
-                for _, row in st.session_state.questions_df.iterrows()
-            ]
-            if questions_data:
-                svg_content = circle_visualizer.create_circle_graph(questions_data, 'question')
-                if svg_content:
-                    st.components.v1.html(svg_content, height=300)
-            else:
-                st.info("No questions added yet")
-
-        with col3:
-            st.subheader("Decisions")
-            decisions_data = [
-                {'decision': row['decision'], 'urgency': row['urgency']}
-                for _, row in st.session_state.decisions_df.iterrows()
-            ]
-            if decisions_data:
-                svg_content = circle_visualizer.create_circle_graph(decisions_data, 'decision')
-                if svg_content:
-                    st.components.v1.html(svg_content, height=300)
-            else:
-                st.info("No decisions added yet")
-
-        with col4:
-            st.subheader("Goals")
-            goals_data = [
-                {'goal': row['goal'], 'urgency': row['urgency']}
-                for _, row in st.session_state.goals_df.iterrows()
-            ]
-            if goals_data:
-                svg_content = circle_visualizer.create_circle_graph(goals_data, 'goal')
-                if svg_content:
-                    st.components.v1.html(svg_content, height=300)
-            else:
-                st.info("No goals added yet")
-
-        with col5:
-            st.subheader("Tasks")
-            tasks_data = [
-                {'task': row['task'], 'urgency': row['urgency']}
-                for _, row in st.session_state.tasks_df.iterrows()
-            ]
-            if tasks_data:
-                svg_content = circle_visualizer.create_circle_graph(tasks_data, 'task')
-                if svg_content:
-                    st.components.v1.html(svg_content, height=300)
-            else:
-                st.info("No tasks added yet")
+    # Todo List Tab
+    with todos_tab:
+        st.header("Todo List")
+        if 'todos_df' in st.session_state and not st.session_state.todos_df.empty:
+            # Group todos by category
+            for category in ["Codebase", "HR", "Business", "Finance", "Other"]:
+                category_todos = st.session_state.todos_df[
+                    st.session_state.todos_df['category'] == category
+                ]
+                if not category_todos.empty:
+                    st.subheader(category)
+                    for _, todo in category_todos.iterrows():
+                        with st.expander(f"{todo['title']} (Importance: {todo['importance']})"):
+                            st.write(todo['details'])
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                if st.button("Edit", key=f"edit_{todo['title']}"):
+                                    st.session_state.selected_todo = todo['title']
+                                    st.rerun()
+                            with col2:
+                                if st.button("Delete", key=f"delete_{todo['title']}"):
+                                    if pipeline_service.delete_todo(todo['title']):
+                                        st.success(f"Deleted todo '{todo['title']}'")
+                                        st.rerun()
+        else:
+            st.info("No todos added yet. Use the sidebar to add new todos.")
 
     # Management Tab
     with manage_tab:

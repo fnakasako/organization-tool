@@ -4,12 +4,19 @@ import pandas as pd
 class PipelineService:
     def __init__(self, st):
         self.st = st
+        
+    def get_all_decisions(self):
+        """Get all decisions from the decisions dataframe"""
+        if 'decisions_df' in self.st.session_state:
+            return self.st.session_state.decisions_df.to_dict('records')
+        return []
 
-    def add_concern(self, concern):
-        """Add a new concern"""
+    def add_concern(self, concern, urgency):
+        """Add a new concern with urgency level"""
         if concern:
             new_concern = pd.DataFrame({
                 'concern': [concern],
+                'urgency': [urgency],
                 'date_added': [datetime.now()]
             })
             self.st.session_state.concerns_df = pd.concat(
@@ -19,12 +26,13 @@ class PipelineService:
             return True
         return False
 
-    def add_question(self, question, related_concern):
-        """Add a new question"""
+    def add_question(self, question, related_concern, urgency):
+        """Add a new question with urgency level"""
         if question and related_concern:
             new_question = pd.DataFrame({
                 'question': [question],
                 'related_concern': [related_concern],
+                'urgency': [urgency],
                 'date_added': [datetime.now()]
             })
             self.st.session_state.questions_df = pd.concat(
@@ -34,13 +42,14 @@ class PipelineService:
             return True
         return False
 
-    def add_decision(self, decision, rationale, related_question):
-        """Add a new decision"""
-        if decision and rationale and related_question:
+    def add_decision(self, decision, rationale, related_questions, urgency):
+        """Add a new decision with urgency level"""
+        if decision and rationale and related_questions:
             new_decision = pd.DataFrame({
                 'decision': [decision],
                 'rationale': [rationale],
-                'related_question': [related_question],
+                'related_questions': [related_questions],  # Now accepts a list
+                'urgency': [urgency],
                 'date_added': [datetime.now()]
             })
             self.st.session_state.decisions_df = pd.concat(
@@ -49,13 +58,14 @@ class PipelineService:
             )
             return True
         return False
-
-    def add_goal(self, goal, related_decision):
-        """Add a new goal"""
+    
+    def add_goal(self, goal, related_decision, urgency):
+        """Add a new goal with urgency level"""
         if goal and related_decision:
             new_goal = pd.DataFrame({
                 'goal': [goal],
                 'related_decision': [related_decision],
+                'urgency': [urgency],
                 'date_added': [datetime.now()]
             })
             self.st.session_state.goals_df = pd.concat(
@@ -65,14 +75,15 @@ class PipelineService:
             return True
         return False
 
-    def add_task(self, task, assignee, related_goal):
-        """Add a new task"""
+    def add_task(self, task, assignee, related_goal, urgency):
+        """Add a new task with urgency level"""
         if task and assignee and related_goal:
             new_task = pd.DataFrame({
                 'task': [task],
                 'assignee': [assignee],
                 'related_goal': [related_goal],
                 'status': ['Not Started'],
+                'urgency': [urgency],
                 'date_added': [datetime.now()]
             })
             self.st.session_state.tasks_df = pd.concat(
@@ -82,22 +93,72 @@ class PipelineService:
             return True
         return False
 
+    def add_todo(self, title, details, category, importance):
+        """Add a new todo item"""
+        if title and details and category:
+            new_todo = pd.DataFrame({
+                'title': [title],
+                'details': [details],
+                'category': [category],
+                'importance': [importance],
+                'date_added': [datetime.now()]
+            })
+            if 'todos_df' not in self.st.session_state:
+                self.st.session_state.todos_df = pd.DataFrame(columns=['title', 'details', 'category', 'importance', 'date_added'])
+            self.st.session_state.todos_df = pd.concat(
+                [self.st.session_state.todos_df, new_todo],
+                ignore_index=True
+            ).sort_values('importance', ascending=False)
+            return True
+        return False
+
+    def update_todo(self, old_title, new_title=None, new_details=None, new_category=None, new_importance=None):
+        """Update a todo item"""
+        if old_title:
+            mask = self.st.session_state.todos_df['title'] == old_title
+            if new_title:
+                self.st.session_state.todos_df.loc[mask, 'title'] = new_title
+            if new_details:
+                self.st.session_state.todos_df.loc[mask, 'details'] = new_details
+            if new_category:
+                self.st.session_state.todos_df.loc[mask, 'category'] = new_category
+            if new_importance is not None:
+                self.st.session_state.todos_df.loc[mask, 'importance'] = new_importance
+            # Re-sort by importance
+            self.st.session_state.todos_df = self.st.session_state.todos_df.sort_values('importance', ascending=False)
+            return True
+        return False
+
+    def delete_todo(self, title):
+        """Delete a todo item"""
+        if title:
+            self.st.session_state.todos_df = self.st.session_state.todos_df[
+                self.st.session_state.todos_df['title'] != title
+            ]
+            return True
+        return False
+
     def get_decision_data(self, decision):
         """Get all related data for a decision"""
         decision_row = self.st.session_state.decisions_df[
             self.st.session_state.decisions_df['decision'] == decision
         ].iloc[0]
         
-        question = decision_row['related_question']
-        question_row = self.st.session_state.questions_df[
-            self.st.session_state.questions_df['question'] == question
-        ].iloc[0]
+        # Get data for all related questions
+        questions_data = []
+        for question in decision_row['related_questions']:
+            question_row = self.st.session_state.questions_df[
+                self.st.session_state.questions_df['question'] == question
+            ].iloc[0]
+            questions_data.append({
+                'question': question,
+                'concern': question_row['related_concern']
+            })
         
         return {
             'decision': decision,
             'rationale': decision_row['rationale'],
-            'question': question,
-            'concern': question_row['related_concern']
+            'questions_data': questions_data
         }
 
     def get_goals_for_decision(self, decision):
@@ -135,12 +196,19 @@ class PipelineService:
                 self.st.session_state.questions_df.loc[mask, 'related_concern'] = new_related_concern
             
             # Update related decisions
-            mask = self.st.session_state.decisions_df['related_question'] == old_question
-            self.st.session_state.decisions_df.loc[mask, 'related_question'] = new_question
+            decisions_mask = self.st.session_state.decisions_df['related_questions'].apply(
+                lambda questions: old_question in questions
+            )
+            
+            # Update the old question to the new question in the list
+            self.st.session_state.decisions_df.loc[decisions_mask, 'related_questions'] = \
+                self.st.session_state.decisions_df.loc[decisions_mask, 'related_questions'].apply(
+                    lambda questions: [new_question if q == old_question else q for q in questions]
+                )
             return True
         return False
 
-    def update_decision(self, old_decision, new_decision, new_rationale=None, new_related_question=None):
+    def update_decision(self, old_decision, new_decision, new_rationale=None, new_related_questions=None):
         """Update a decision and cascade the change to related items"""
         if old_decision and new_decision:
             # Update the decision itself
@@ -148,8 +216,8 @@ class PipelineService:
             self.st.session_state.decisions_df.loc[mask, 'decision'] = new_decision
             if new_rationale:
                 self.st.session_state.decisions_df.loc[mask, 'rationale'] = new_rationale
-            if new_related_question:
-                self.st.session_state.decisions_df.loc[mask, 'related_question'] = new_related_question
+            if new_related_questions:
+                self.st.session_state.decisions_df.loc[mask, 'related_questions'] = new_related_questions
             
             # Update related goals
             mask = self.st.session_state.goals_df['related_decision'] == old_decision
@@ -204,9 +272,11 @@ class PipelineService:
     def delete_question(self, question):
         """Delete a question and all related items"""
         if question:
-            # Get related decisions
+            # Get related decisions (those that have this question in their related_questions list)
             related_decisions = self.st.session_state.decisions_df[
-                self.st.session_state.decisions_df['related_question'] == question
+                self.st.session_state.decisions_df['related_questions'].apply(
+                    lambda questions: question in questions
+                )
             ]['decision'].tolist()
             
             # Delete related decisions and their children

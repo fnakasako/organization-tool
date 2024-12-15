@@ -13,15 +13,24 @@ class Sidebar:
             self._render_decision_section()
             self._render_goal_section()
             self._render_task_section()
+            self._render_todo_section()
 
     def _render_concern_section(self):
         """Render the concern input section"""
         st.subheader("Add Concern")
         with st.form(key="concern_form"):
             concern = st.text_input("New Concern")
+            urgency = st.slider(
+                "Urgency",
+                min_value=1,
+                max_value=100,
+                value=50,
+                help="Set the urgency level (1-100)",
+                key="concern_urgency"
+            )
             submit = st.form_submit_button("Add Concern")
             if submit and concern:
-                if self.pipeline_service.add_concern(concern):
+                if self.pipeline_service.add_concern(concern, urgency):
                     st.success("Concern added successfully!")
                     st.rerun()
 
@@ -35,9 +44,17 @@ class Sidebar:
                 "Related Concern",
                 concerns if concerns else ['']
             )
+            urgency = st.slider(
+                "Urgency",
+                min_value=1,
+                max_value=100,
+                value=50,
+                help="Set the urgency level (1-100)",
+                key="question_urgency"
+            )
             submit = st.form_submit_button("Add Question")
             if submit and question and selected_concern and selected_concern != '':
-                if self.pipeline_service.add_question(question, selected_concern):
+                if self.pipeline_service.add_question(question, selected_concern, urgency):
                     st.success("Question added successfully!")
                     st.rerun()
 
@@ -48,13 +65,24 @@ class Sidebar:
             decision = st.text_input("New Decision")
             rationale = st.text_area("Rationale")
             questions = st.session_state.questions_df['question'].tolist()
-            selected_question = st.selectbox(
-                "Related Question",
-                questions if questions else ['']
+            
+            # Changed to multiselect for multiple question selection
+            selected_questions = st.multiselect(
+                "Related Questions",
+                questions if questions else []
+            )
+            
+            urgency = st.slider(
+                "Urgency",
+                min_value=1,
+                max_value=100,
+                value=50,
+                help="Set the urgency level (1-100)",
+                key="decision_urgency"
             )
             submit = st.form_submit_button("Add Decision")
-            if submit and decision and rationale and selected_question and selected_question != '':
-                if self.pipeline_service.add_decision(decision, rationale, selected_question):
+            if submit and decision and rationale and selected_questions:
+                if self.pipeline_service.add_decision(decision, rationale, selected_questions, urgency):
                     st.success("Decision added successfully!")
                     st.rerun()
 
@@ -68,9 +96,17 @@ class Sidebar:
                 "Related Decision",
                 decisions if decisions else ['']
             )
+            urgency = st.slider(
+                "Urgency",
+                min_value=1,
+                max_value=100,
+                value=50,
+                help="Set the urgency level (1-100)",
+                key="goal_urgency"
+            )
             submit = st.form_submit_button("Add Goal")
             if submit and goal and selected_decision and selected_decision != '':
-                if self.pipeline_service.add_goal(goal, selected_decision):
+                if self.pipeline_service.add_goal(goal, selected_decision, urgency):
                     st.success("Goal added successfully!")
                     st.rerun()
 
@@ -85,26 +121,40 @@ class Sidebar:
                 "Related Goal",
                 goals if goals else ['']
             )
-            submit = st.form_submit_button("Add Task")
-            if submit and task and assignee and selected_goal and selected_goal != '':
-                if self.pipeline_service.add_task(task, assignee, selected_goal):
-                    st.success("Task added successfully!")
-                    st.rerun()
-
-    def _render_concern_section(self):
-        """Render the concern input section"""
-        st.subheader("Add Concern")
-        with st.form(key="concern_form"):
-            concern = st.text_input("New Concern")
             urgency = st.slider(
                 "Urgency",
                 min_value=1,
                 max_value=100,
                 value=50,
-                help="Set the urgency level (1-100)"
+                help="Set the urgency level (1-100)",
+                key="task_urgency"
             )
-            submit = st.form_submit_button("Add Concern")
-            if submit and concern:
-                if self.pipeline_service.add_concern(concern, urgency):
-                    st.success("Concern added successfully!")
+            submit = st.form_submit_button("Add Task")
+            if submit and task and assignee and selected_goal and selected_goal != '':
+                if self.pipeline_service.add_task(task, assignee, selected_goal, urgency):
+                    st.success("Task added successfully!")
+                    st.rerun()
+
+    def _render_todo_section(self):
+        """Render the todo input section"""
+        st.subheader("Add Todo")
+        with st.form(key="todo_form"):
+            title = st.text_input("Title")
+            details = st.text_area("Details")
+            category = st.selectbox(
+                "Category",
+                ["Codebase", "HR", "Business", "Finance", "Other"]
+            )
+            importance = st.slider(
+                "Importance",
+                min_value=1,
+                max_value=100,
+                value=50,
+                help="Set the importance level (1-100)",
+                key="todo_importance"
+            )
+            submit = st.form_submit_button("Add Todo")
+            if submit and title and details and category:
+                if self.pipeline_service.add_todo(title, details, category, importance):
+                    st.success("Todo added successfully!")
                     st.rerun()

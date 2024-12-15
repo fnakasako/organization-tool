@@ -8,8 +8,8 @@ class EntryManager:
         """Render the entry management interface"""
         st.header("Manage Entries")
         
-        tab1, tab2, tab3, tab4, tab5 = st.tabs([
-            "Concerns", "Questions", "Decisions", "Goals", "Tasks"
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+            "Concerns", "Questions", "Decisions", "Goals", "Tasks", "Todos"
         ])
 
         with tab1:
@@ -26,6 +26,9 @@ class EntryManager:
             
         with tab5:
             self._manage_tasks()
+            
+        with tab6:
+            self._manage_todos()
 
     def _manage_concerns(self):
         concerns = st.session_state.concerns_df['concern'].tolist()
@@ -61,13 +64,19 @@ class EntryManager:
                 ].iloc[0]
                 
                 new_question = st.text_input("New Question Text", value=selected_question, key="edit_question")
-                new_concern = st.selectbox(
-                    "Related Concern",
-                    st.session_state.concerns_df['concern'].tolist(),
-                    index=st.session_state.concerns_df['concern'].tolist().index(question_data['related_concern'])
-                )
                 
-                if st.button("Update Question", key="update_question"):
+                # Check if there are any concerns before creating the selectbox
+                if not st.session_state.concerns_df.empty:
+                    new_concern = st.selectbox(
+                        "Related Concern",
+                        st.session_state.concerns_df['concern'].tolist(),
+                        index=st.session_state.concerns_df['concern'].tolist().index(question_data['related_concern'])
+                    )
+                else:
+                    st.warning("No concerns available. Please add concerns first.")
+                    new_concern = None
+                
+                if st.button("Update Question", key="update_question") and new_concern:
                     if self.pipeline_service.update_question(selected_question, new_question, new_concern):
                         st.success(f"Updated question to '{new_question}'")
 
@@ -88,14 +97,27 @@ class EntryManager:
                 ].iloc[0]
                 
                 new_decision = st.text_input("New Decision Text", value=selected_decision, key="edit_decision")
-                new_rationale = st.text_area("New Rationale", value=decision_data['rationale'], key="edit_rationale")
-                new_question = st.selectbox(
-                    "Related Question",
-                    st.session_state.questions_df['question'].tolist(),
-                    index=st.session_state.questions_df['question'].tolist().index(decision_data['related_question'])
-                )
+                new_rationale = st.text_area("New Rationale", value=decision_data.get('rationale', ''), key="edit_rationale")
                 
-                if st.button("Update Decision", key="update_decision"):
+                # Check if there are any questions before creating the selectbox
+                if not st.session_state.questions_df.empty:
+                    questions_list = st.session_state.questions_df['question'].tolist()
+                    related_question = decision_data.get('related_question')
+                    if related_question in questions_list:
+                        question_index = questions_list.index(related_question)
+                    else:
+                        question_index = 0
+                    
+                    new_question = st.selectbox(
+                        "Related Question",
+                        questions_list,
+                        index=question_index
+                    )
+                else:
+                    st.warning("No questions available. Please add questions first.")
+                    new_question = None
+                
+                if st.button("Update Decision", key="update_decision") and new_question:
                     if self.pipeline_service.update_decision(
                         selected_decision, new_decision, new_rationale, new_question
                     ):
@@ -118,13 +140,26 @@ class EntryManager:
                 ].iloc[0]
                 
                 new_goal = st.text_input("New Goal Text", value=selected_goal, key="edit_goal")
-                new_decision = st.selectbox(
-                    "Related Decision",
-                    st.session_state.decisions_df['decision'].tolist(),
-                    index=st.session_state.decisions_df['decision'].tolist().index(goal_data['related_decision'])
-                )
                 
-                if st.button("Update Goal", key="update_goal"):
+                # Check if there are any decisions before creating the selectbox
+                if not st.session_state.decisions_df.empty:
+                    decisions_list = st.session_state.decisions_df['decision'].tolist()
+                    related_decision = goal_data.get('related_decision')
+                    if related_decision in decisions_list:
+                        decision_index = decisions_list.index(related_decision)
+                    else:
+                        decision_index = 0
+                        
+                    new_decision = st.selectbox(
+                        "Related Decision",
+                        decisions_list,
+                        index=decision_index
+                    )
+                else:
+                    st.warning("No decisions available. Please add decisions first.")
+                    new_decision = None
+                
+                if st.button("Update Goal", key="update_goal") and new_decision:
                     if self.pipeline_service.update_goal(selected_goal, new_goal, new_decision):
                         st.success(f"Updated goal to '{new_goal}'")
 
@@ -145,19 +180,33 @@ class EntryManager:
                 ].iloc[0]
                 
                 new_task = st.text_input("New Task Text", value=selected_task, key="edit_task")
-                new_assignee = st.text_input("New Assignee", value=task_data['assignee'], key="edit_assignee")
-                new_goal = st.selectbox(
-                    "Related Goal",
-                    st.session_state.goals_df['goal'].tolist(),
-                    index=st.session_state.goals_df['goal'].tolist().index(task_data['related_goal'])
-                )
+                new_assignee = st.text_input("New Assignee", value=task_data.get('assignee', ''), key="edit_assignee")
+                
+                # Check if there are any goals before creating the selectbox
+                if not st.session_state.goals_df.empty:
+                    goals_list = st.session_state.goals_df['goal'].tolist()
+                    related_goal = task_data.get('related_goal')
+                    if related_goal in goals_list:
+                        goal_index = goals_list.index(related_goal)
+                    else:
+                        goal_index = 0
+                        
+                    new_goal = st.selectbox(
+                        "Related Goal",
+                        goals_list,
+                        index=goal_index
+                    )
+                else:
+                    st.warning("No goals available. Please add goals first.")
+                    new_goal = None
+                    
                 new_status = st.selectbox(
                     "Status",
                     ["Not Started", "In Progress", "Completed"],
-                    index=["Not Started", "In Progress", "Completed"].index(task_data['status'])
+                    index=["Not Started", "In Progress", "Completed"].index(task_data.get('status', 'Not Started'))
                 )
                 
-                if st.button("Update Task", key="update_task"):
+                if st.button("Update Task", key="update_task") and new_goal:
                     new_task_data = {
                         'task': new_task,
                         'assignee': new_assignee,
@@ -166,3 +215,49 @@ class EntryManager:
                     }
                     if self.pipeline_service.update_task(selected_task, new_task_data):
                         st.success(f"Updated task to '{new_task}'")
+
+    def _manage_todos(self):
+        """Manage todo items"""
+        if 'todos_df' in st.session_state and not st.session_state.todos_df.empty:
+            todos = st.session_state.todos_df['title'].tolist()
+            selected_todo = st.selectbox("Select Todo to Manage", todos, key="manage_todo")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Delete Todo", key="delete_todo"):
+                    if self.pipeline_service.delete_todo(selected_todo):
+                        st.success(f"Deleted todo '{selected_todo}'")
+                        st.rerun()
+            
+            with col2:
+                todo_data = st.session_state.todos_df[
+                    st.session_state.todos_df['title'] == selected_todo
+                ].iloc[0]
+                
+                new_title = st.text_input("Title", value=todo_data['title'], key="edit_todo_title")
+                new_details = st.text_area("Details", value=todo_data['details'], key="edit_todo_details")
+                new_category = st.selectbox(
+                    "Category",
+                    ["Codebase", "HR", "Business", "Finance", "Other"],
+                    index=["Codebase", "HR", "Business", "Finance", "Other"].index(todo_data['category'])
+                )
+                new_importance = st.slider(
+                    "Importance",
+                    min_value=1,
+                    max_value=100,
+                    value=int(todo_data['importance']),
+                    key="edit_todo_importance"
+                )
+                
+                if st.button("Update Todo", key="update_todo"):
+                    if self.pipeline_service.update_todo(
+                        selected_todo,
+                        new_title,
+                        new_details,
+                        new_category,
+                        new_importance
+                    ):
+                        st.success(f"Updated todo '{new_title}'")
+                        st.rerun()
+        else:
+            st.info("No todos available. Add some todos using the sidebar.")

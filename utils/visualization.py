@@ -1,17 +1,17 @@
 import streamlit as st
-import networkx as nx
 from io import StringIO
 import math
 
 class BaseVisualizer:
     def __init__(self):
+        # You can customize these colors by changing the hex values
         self.colors = {
-            'concern': '#ff9999',    # Light red
-            'question': '#99ff99',   # Light green
-            'decision': '#9999ff',   # Light blue
-            'rationale': '#ffcc99',  # Light orange
-            'goal': '#ffff99',       # Light yellow
-            'task': '#ff99ff'        # Light purple
+            'concern': '#FCB0B3',     # Cherry blossom pink
+            'question': '#F93943',    # Imperial red
+            'decision': '#D1F5FF',    # Light Cyan
+            'rationale': '#F4E409',   # Aureolion
+            'goal': '#FFBE0B',        # Golden yellow
+            'task': '#E3D985'         # Flax
         }
         
 class GraphVisualizer(BaseVisualizer):
@@ -32,7 +32,6 @@ class GraphVisualizer(BaseVisualizer):
         svg_content = self._generate_svg(G, pos, dimensions)
         return svg_content
 
-
     def render(self):
         raise NotImplementedError("Subclasses must implement render method")
         
@@ -44,12 +43,17 @@ class PipelineVisualizer(BaseVisualizer):
         self.node_radius = 80
         self.text_padding = 10
 
-    def render(self, selected_decision):
+    def render(self, selected_decision=None):
         """Render the pipeline visualization for a selected decision"""
+        if selected_decision is None:
+            return
+            
         graph = self.graph_service.generate_decision_graph(selected_decision)
         svg_content = self._generate_visualization(graph)
         if svg_content:
             self._render_interactive_svg(svg_content)
+        else:
+            st.info("No relationships found for this decision.")
 
     def _generate_visualization(self, G):
         """Generate the complete visualization"""
@@ -64,43 +68,83 @@ class PipelineVisualizer(BaseVisualizer):
         """Calculate node positions for triangular layout"""
         pos = {}
         
-        # Canvas dimensions
-        canvas_width = 1200
-        canvas_height = 800
-        base_y = canvas_height - 100  # Bottom of triangle
-        peak_y = 100                  # Top of triangle
+        # Canvas dimensions - increased width for broader triangle
+        width = 1600  # Increased from 1200
+        height = 800
+        margin = 100
         
-        # Core triangle positions
-        pos['c1'] = (200, base_y)                    # Concern (bottom left)
-        pos['q1'] = (canvas_width/2, base_y - 200)   # Question (middle)
-        pos['d1'] = (canvas_width/2, peak_y)         # Decision (top)
-        pos['r1'] = (canvas_width/2, peak_y + 150)   # Rationale (below decision)
-
-        # Get goals and tasks
+        # Node spacing constants - increased horizontal spacing
+        vertical_spacing = self.node_radius * 2.5  # Space between decision and rationale
+        horizontal_spacing = self.node_radius * 4  # Increased from 3 for broader layout
+        
+        # Find nodes of each type
+        decisions = [n for n in G.nodes() if G.nodes[n]['node_type'] == 'decision']
+        questions = [n for n in G.nodes() if G.nodes[n]['node_type'] == 'question']
+        concerns = [n for n in G.nodes() if G.nodes[n]['node_type'] == 'concern']
         goals = [n for n in G.nodes() if G.nodes[n]['node_type'] == 'goal']
+        tasks = [n for n in G.nodes() if G.nodes[n]['node_type'] == 'task']
+        rationales = [n for n in G.nodes() if G.nodes[n]['node_type'] == 'rationale']
         
+        # Define key points
+        apex_y = margin
+        base_y = height - margin
+        center_x = width / 2
+        
+        # Position decision at the top
+        decision_x = center_x
+        decision_y = apex_y
+        pos[decisions[0]] = (decision_x, decision_y)
+        
+        # Position rationale below decision
+        pos[rationales[0]] = (decision_x, decision_y + vertical_spacing)
+        
+        # Group questions by their related concern
+        question_groups = {}
+        for question in questions:
+            concern = None
+            for edge in G.edges():
+                if edge[1] == question and G.nodes[edge[0]]['node_type'] == 'concern':
+                    concern = edge[0]
+                    break
+            if concern not in question_groups:
+                question_groups[concern] = []
+            question_groups[concern].append(question)
+        
+        # Calculate total width needed for concerns and their questions
+        total_width = len(question_groups) * horizontal_spacing * 1.5  # Increased spacing multiplier
+        start_x = center_x - (total_width / 2)
+        
+        # Position concerns and their related questions
+        for i, (concern, related_questions) in enumerate(question_groups.items()):
+            # Position concern
+            concern_x = start_x + (i * horizontal_spacing * 1.5)  # Increased spacing
+            concern_y = base_y
+            pos[concern] = (concern_x, concern_y)
+            
+            # Position related questions above the concern with more spacing
+            question_y = (apex_y + vertical_spacing + base_y) / 2  # Halfway between decision and concern
+            question_spacing = horizontal_spacing * 0.8  # Increased from default for better separation
+            
+            for j, question in enumerate(related_questions):
+                question_x = concern_x + ((j - (len(related_questions) - 1) / 2) * question_spacing)
+                pos[question] = (question_x, question_y)
+        
+        # Position goals and tasks if they exist
         if goals:
-            goal_count = len(goals)
-            goal_spacing = (base_y - peak_y) / (goal_count + 1)
+            goal_y = (apex_y + vertical_spacing + base_y) / 3
+            goal_spacing = horizontal_spacing * 1.2  # Increased spacing
+            goal_start_x = center_x + horizontal_spacing
             
             for i, goal in enumerate(goals):
-                # Position goals along right diagonal
-                goal_y = peak_y + ((i + 1) * goal_spacing)
-                goal_x = canvas_width - 300 + (((base_y - goal_y) / (base_y - peak_y)) * 100)
-                pos[goal] = (goal_x, goal_y)
+                pos[goal] = (goal_start_x + (i * goal_spacing), goal_y)
                 
-                # Position related tasks
-                goal_tasks = [n for n in G.nodes() if (
-                    G.nodes[n]['node_type'] == 'task' and 
-                    goal in G.predecessors(n)
-                )]
-                
-                if goal_tasks:
-                    task_spacing = 100
-                    for j, task in enumerate(goal_tasks):
-                        task_y = goal_y + (j - len(goal_tasks)/2) * task_spacing
-                        pos[task] = (canvas_width - 100, task_y)
-
+                # Position related tasks with more spacing
+                task_y = goal_y + vertical_spacing
+                related_tasks = [t for t in tasks if (goal, t) in G.edges()]
+                for j, task in enumerate(related_tasks):
+                    pos[task] = (goal_start_x + (i * goal_spacing) + ((j - len(related_tasks)/2) * horizontal_spacing/1.5),
+                                task_y)
+        
         return pos
 
     def _calculate_graph_dimensions(self, G, pos):
@@ -114,7 +158,7 @@ class PipelineVisualizer(BaseVisualizer):
         height = (max_y - min_y) * 1.5
         
         return {
-            'width': max(width, 1000),
+            'width': max(width, 1600),  # Increased from 1000
             'height': max(height, 800),
             'view_box': f"{min_x-100} {min_y-100} {width+200} {height+200}"
         }
@@ -181,7 +225,7 @@ class PipelineVisualizer(BaseVisualizer):
                             <circle r="{self.node_radius}"
                                    fill="{self.colors[node_type]}"
                                    stroke="#666"
-                                   stroke-width="1"/>''')
+                                   stroke-width="0.5"/>''')  # Reduced from 1
             
             text_width = self.node_radius * 1.8
             output.write(self._get_node_text(text, text_width))
@@ -333,8 +377,8 @@ class PipelineVisualizer(BaseVisualizer):
 class CircleVisualizer(BaseVisualizer):
     def __init__(self):
         super().__init__()
-        self.base_radius = 30
-        self.padding = 10
+        self.base_radius = 50  # Increased base radius for better visibility
+        self.padding = 20
 
     def create_circle_graph(self, items, item_type):
         """Create an SVG circle graph where circle sizes are based on urgency"""
@@ -345,8 +389,8 @@ class CircleVisualizer(BaseVisualizer):
         items_sorted = sorted(items, key=lambda x: x['urgency'], reverse=True)
         
         # Calculate layout
-        width = 800
-        height = 600
+        width = 900  # Full width for better visibility
+        height = 600  # Full height for better visibility
         
         # Generate SVG
         return self._generate_circle_svg(items_sorted, item_type, width, height)
@@ -357,6 +401,7 @@ class CircleVisualizer(BaseVisualizer):
         output.append(f'''
             <svg xmlns="http://www.w3.org/2000/svg" 
                 width="{width}" height="{height}"
+                viewBox="0 0 {width} {height}"
                 style="background-color: white;">
             <defs>
                 <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
@@ -373,8 +418,8 @@ class CircleVisualizer(BaseVisualizer):
             </defs>
         ''')
 
-        # Calculate positions in a spiral layout
-        positions = self._calculate_spiral_positions(items, width, height)
+        # Calculate positions in a packed layout
+        positions = self._calculate_packed_positions(items, width, height)
 
         # Draw circles
         for item, pos in zip(items, positions):
@@ -387,7 +432,7 @@ class CircleVisualizer(BaseVisualizer):
                     <circle r="{radius}"
                            fill="{self.colors[item_type]}"
                            stroke="#666"
-                           stroke-width="1"/>
+                           stroke-width=".5"/>
                     <foreignObject x="{-radius}" y="{-radius}"
                                  width="{radius*2}" height="{radius*2}">
                         <div xmlns="http://www.w3.org/1999/xhtml"
@@ -398,11 +443,11 @@ class CircleVisualizer(BaseVisualizer):
                                     justify-content: center;
                                     text-align: center;
                                     font-family: Arial;
-                                    font-size: {max(10, radius/4)}px;
-                                    overflow: hidden;">
-                            <div style="padding: 5px;">
-                                {item[item_type]}<br/>
-                                <small>Urgency: {item['urgency']}</small>
+                                    font-size: {max(12, radius/4)}px;
+                                    overflow: hidden;
+                                    padding: 5px;">
+                            <div>
+                                {item[item_type]}
                             </div>
                         </div>
                     </foreignObject>
@@ -412,21 +457,32 @@ class CircleVisualizer(BaseVisualizer):
         output.append('</svg>')
         return '\n'.join(output)
 
-    def _calculate_spiral_positions(self, items, width, height):
-        """Calculate positions for circles in a spiral pattern"""
+    def _calculate_packed_positions(self, items, width, height):
+        """Calculate positions for circles in a packed layout"""
         positions = []
         center_x = width / 2
         center_y = height / 2
         
-        # Use golden ratio for spiral
-        golden_ratio = (1 + math.sqrt(5)) / 2
-        
-        for i in range(len(items)):
-            # Calculate spiral coordinates
-            angle = i * golden_ratio * 2 * math.pi
-            radius = 20 * math.sqrt(i)
-            x = center_x + radius * math.cos(angle)
-            y = center_y + radius * math.sin(angle)
-            positions.append((x, y))
+        if len(items) == 1:
+            # Single item centered
+            positions.append((center_x, center_y))
+        elif len(items) <= 3:
+            # Small number of items in a triangle
+            angle_step = 2 * math.pi / len(items)
+            radius = min(width, height) / 4
+            for i in range(len(items)):
+                angle = i * angle_step
+                x = center_x + radius * math.cos(angle)
+                y = center_y + radius * math.sin(angle)
+                positions.append((x, y))
+        else:
+            # Multiple items in a circular layout
+            angle_step = 2 * math.pi / len(items)
+            radius = min(width, height) / 3
+            for i in range(len(items)):
+                angle = i * angle_step
+                x = center_x + radius * math.cos(angle)
+                y = center_y + radius * math.sin(angle)
+                positions.append((x, y))
             
         return positions

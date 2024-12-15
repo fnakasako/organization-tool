@@ -13,16 +13,32 @@ class GraphService:
         if not decision_data:
             return None
 
-        # Add main nodes
-        G.add_node('c1', text=f"Concern:\n{decision_data['concern']}", node_type='concern')
-        G.add_node('q1', text=f"Question:\n{decision_data['question']}", node_type='question')
+        # Add decision and rationale nodes
         G.add_node('d1', text=f"Decision:\n{decision}", node_type='decision')
         G.add_node('r1', text=f"Rationale:\n{decision_data['rationale']}", node_type='rationale')
-
-        # Add basic edges
-        G.add_edge('c1', 'q1')
-        G.add_edge('q1', 'd1')
         G.add_edge('d1', 'r1')
+
+        # Track unique concerns to avoid duplicates
+        unique_concerns = {}  # concern text -> node id mapping
+
+        # Add questions and their concerns
+        for idx, q_data in enumerate(decision_data['questions_data']):
+            q_node_id = f"q{idx+1}"
+            concern_text = q_data['concern']
+            
+            # Check if we've already created a node for this concern
+            if concern_text in unique_concerns:
+                c_node_id = unique_concerns[concern_text]
+            else:
+                c_node_id = f"c{len(unique_concerns) + 1}"
+                unique_concerns[concern_text] = c_node_id
+                G.add_node(c_node_id, text=f"Concern:\n{concern_text}", node_type='concern')
+            
+            G.add_node(q_node_id, text=f"Question:\n{q_data['question']}", node_type='question')
+            
+            # Connect concern to question and question to decision
+            G.add_edge(c_node_id, q_node_id)
+            G.add_edge(q_node_id, 'd1')
 
         # Add goals and tasks
         self._add_goals_and_tasks(G, decision)
