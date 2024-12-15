@@ -26,7 +26,7 @@ def render_main_content(pipeline_service, graph_service, graph_visualizer, circl
     viz_tab, circles_tab, todos_tab, manage_tab = st.tabs([
         "Pipeline Visualization", 
         "Item Overview",
-        "Todo List",
+        "To do List",
         "Manage Entries"
     ])
     

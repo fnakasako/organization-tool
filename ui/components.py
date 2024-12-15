@@ -137,7 +137,7 @@ class Sidebar:
 
     def _render_todo_section(self):
         """Render the todo input section"""
-        st.subheader("Add Todo")
+        st.subheader("Add To do")
         with st.form(key="todo_form"):
             title = st.text_input("Title")
             details = st.text_area("Details")
