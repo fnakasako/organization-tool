@@ -85,27 +85,52 @@ def render_main_content(pipeline_service, graph_service, graph_visualizer, circl
     # Todo List Tab
     with todos_tab:
         st.header("Todo List")
+        
+        # Add category filter controls
         if 'todos_df' in st.session_state and not st.session_state.todos_df.empty:
-            # Group todos by category
-            for category in ["Codebase", "HR", "Business", "Finance", "Other"]:
-                category_todos = st.session_state.todos_df[
-                    st.session_state.todos_df['category'] == category
+            # Get all unique categories from todos
+            all_categories = set()
+            for categories in st.session_state.todos_df['categories']:
+                all_categories.update(categories)
+            
+            # Create category filter
+            selected_categories = st.multiselect(
+                "Filter by Categories",
+                sorted(list(all_categories)),
+                help="Select one or more categories to filter todos"
+            )
+            
+            # Filter todos based on selected categories
+            if selected_categories:
+                filtered_todos = st.session_state.todos_df[
+                    st.session_state.todos_df['categories'].apply(
+                        lambda x: any(cat in x for cat in selected_categories)
+                    )
                 ]
-                if not category_todos.empty:
-                    st.subheader(category)
-                    for _, todo in category_todos.iterrows():
-                        with st.expander(f"{todo['title']} (Importance: {todo['importance']})"):
-                            st.write(todo['details'])
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                if st.button("Edit", key=f"edit_{todo['title']}"):
-                                    st.session_state.selected_todo = todo['title']
+            else:
+                filtered_todos = st.session_state.todos_df
+            
+            # Sort filtered todos by importance
+            filtered_todos = filtered_todos.sort_values('importance', ascending=False)
+            
+            # Display filtered and sorted todos
+            if not filtered_todos.empty:
+                for _, todo in filtered_todos.iterrows():
+                    with st.expander(f"{todo['title']} (Importance: {todo['importance']})"):
+                        st.write(todo['details'])
+                        st.write(f"Categories: {', '.join(todo['categories'])}")
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            if st.button("Edit", key=f"edit_{todo['title']}"):
+                                st.session_state.selected_todo = todo['title']
+                                st.rerun()
+                        with col2:
+                            if st.button("Delete", key=f"delete_{todo['title']}"):
+                                if pipeline_service.delete_todo(todo['title']):
+                                    st.success(f"Deleted todo '{todo['title']}'")
                                     st.rerun()
-                            with col2:
-                                if st.button("Delete", key=f"delete_{todo['title']}"):
-                                    if pipeline_service.delete_todo(todo['title']):
-                                        st.success(f"Deleted todo '{todo['title']}'")
-                                        st.rerun()
+            else:
+                st.info("No todos found for the selected categories.")
         else:
             st.info("No todos added yet. Use the sidebar to add new todos.")
 

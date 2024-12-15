@@ -236,11 +236,16 @@ class EntryManager:
                 
                 new_title = st.text_input("Title", value=todo_data['title'], key="edit_todo_title")
                 new_details = st.text_area("Details", value=todo_data['details'], key="edit_todo_details")
-                new_category = st.selectbox(
-                    "Category",
-                    ["Codebase", "HR", "Business", "Finance", "Other"],
-                    index=["Codebase", "HR", "Business", "Finance", "Other"].index(todo_data['category'])
+                
+                # Update to use multiselect for categories
+                available_categories = ["Codebase", "HR", "Business", "Finance", "Other"]
+                new_categories = st.multiselect(
+                    "Categories",
+                    available_categories,
+                    default=todo_data['categories'],
+                    key="edit_todo_categories"
                 )
+                
                 new_importance = st.slider(
                     "Importance",
                     min_value=1,
@@ -254,7 +259,7 @@ class EntryManager:
                         selected_todo,
                         new_title,
                         new_details,
-                        new_category,
+                        new_categories,
                         new_importance
                     ):
                         st.success(f"Updated todo '{new_title}'")

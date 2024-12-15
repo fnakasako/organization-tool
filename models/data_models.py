@@ -25,7 +25,7 @@ class DataFrameModel:
     
     @staticmethod
     def create_todos_df():
-        return pd.DataFrame(columns=['title', 'details', 'category', 'importance', 'date_added'])
+        return pd.DataFrame(columns=['title', 'details', 'categories', 'importance', 'date_added'])
 
 class PipelineItem:
     def __init__(self, data):

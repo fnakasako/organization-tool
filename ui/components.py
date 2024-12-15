@@ -148,9 +148,10 @@ class Sidebar:
         with st.form(key="todo_form"):
             title = st.text_input("Title")
             details = st.text_area("Details")
-            category = st.selectbox(
-                "Category",
-                ["Codebase", "HR", "Business", "Finance", "Other"]
+            categories = st.multiselect(
+                "Categories",
+                ["Codebase", "HR", "Business", "Finance", "Other"],
+                help="Select one or more categories"
             )
             importance = st.slider(
                 "Importance",
@@ -161,7 +162,7 @@ class Sidebar:
                 key="todo_importance"
             )
             submit = st.form_submit_button("Add Todo")
-            if submit and title and details and category:
-                if self.pipeline_service.add_todo(title, details, category, importance):
+            if submit and title and details and categories:
+                if self.pipeline_service.add_todo(title, details, categories, importance):
                     st.success("Todo added successfully!")
                     st.rerun()

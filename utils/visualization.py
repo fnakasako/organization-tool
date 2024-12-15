@@ -35,13 +35,9 @@ class GraphVisualizer(BaseVisualizer):
     def render(self):
         raise NotImplementedError("Subclasses must implement render method")
         
-class PipelineVisualizer(BaseVisualizer):
+class PipelineVisualizer(GraphVisualizer):
     def __init__(self, pipeline_service, graph_service):
-        super().__init__()
-        self.pipeline_service = pipeline_service
-        self.graph_service = graph_service
-        self.node_radius = 80
-        self.text_padding = 10
+        super().__init__(pipeline_service, graph_service)
 
     def render(self, selected_decision=None):
         """Render the pipeline visualization for a selected decision"""
@@ -82,7 +78,7 @@ class PipelineVisualizer(BaseVisualizer):
         questions = [n for n in G.nodes() if G.nodes[n]['node_type'] == 'question']
         concerns = [n for n in G.nodes() if G.nodes[n]['node_type'] == 'concern']
         goals = [n for n in G.nodes() if G.nodes[n]['node_type'] == 'goal']
-        tasks = [n for n in G.nodes() if G.nodes[n]['node_type'] == 'task']
+        tasks = [t for t in G.nodes() if G.nodes[t]['node_type'] == 'task']
         rationales = [n for n in G.nodes() if G.nodes[n]['node_type'] == 'rationale']
         
         # Define key points
@@ -271,19 +267,83 @@ class PipelineVisualizer(BaseVisualizer):
         st.components.v1.html(
             f'''
             <div style="width: 100%; overflow: auto; border: 1px solid #ccc; border-radius: 5px;">
-                {svg_content}
+                <style>
+                    .node-popup {{
+                        display: none;
+                        position: absolute;
+                        background: white;
+                        border: 1px solid #ccc;
+                        border-radius: 5px;
+                        padding: 10px;
+                        max-width: 300px;
+                        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                        z-index: 1000;
+                    }}
+                    .node {{
+                        cursor: pointer;
+                    }}
+                    svg {{
+                        cursor: grab;
+                    }}
+                    svg:active {{
+                        cursor: grabbing;
+                    }}
+                </style>
+                <div style="position: relative;">
+                    {svg_content}
+                </div>
+                <script>
+                    {self._get_interactive_js()}
+                    
+                    // Add popup functionality
+                    document.addEventListener('DOMContentLoaded', function() {{
+                        const nodes = document.querySelectorAll('.node');
+                        
+                        nodes.forEach((node, index) => {{
+                            // Create popup for each node
+                            const popup = document.createElement('div');
+                            popup.className = 'node-popup';
+                            popup.id = `node-popup-${{index}}`;
+                            
+                            // Get the text content from the node's foreignObject
+                            const text = node.querySelector('foreignObject div').textContent.trim();
+                            popup.textContent = text;
+                            
+                            // Add popup to the container
+                            node.parentElement.appendChild(popup);
+                            
+                            // Show popup on click
+                            node.addEventListener('click', function(e) {{
+                                e.stopPropagation();
+                                
+                                // Hide all popups first
+                                document.querySelectorAll('.node-popup').forEach(p => {{
+                                    p.style.display = 'none';
+                                }});
+                                
+                                // Show this popup
+                                popup.style.display = 'block';
+                                
+                                // Position popup near the click
+                                const rect = node.getBoundingClientRect();
+                                const containerRect = node.parentElement.getBoundingClientRect();
+                                
+                                popup.style.left = (e.clientX - containerRect.left + 10) + 'px';
+                                popup.style.top = (e.clientY - containerRect.top + 10) + 'px';
+                            }});
+                        }});
+                        
+                        // Close popup when clicking outside
+                        document.addEventListener('click', function(e) {{
+                            if (!e.target.closest('.node')) {{
+                                document.querySelectorAll('.node-popup').forEach(popup => {{
+                                    popup.style.display = 'none';
+                                }});
+                            }}
+                        }});
+                    }});
+                </script>
             </div>
-            <script>
-                {self._get_interactive_js()}
-            </script>
-            <style>
-                svg {{
-                    cursor: grab;
-                }}
-                svg:active {{
-                    cursor: grabbing;
-                }}
-            </style>
             ''',
             height=600
         )
@@ -377,7 +437,7 @@ class PipelineVisualizer(BaseVisualizer):
 class CircleVisualizer(BaseVisualizer):
     def __init__(self):
         super().__init__()
-        self.base_radius = 50  # Increased base radius for better visibility
+        self.base_radius = 50  # Base radius for circles
         self.padding = 20
 
     def create_circle_graph(self, items, item_type):
@@ -389,15 +449,85 @@ class CircleVisualizer(BaseVisualizer):
         items_sorted = sorted(items, key=lambda x: x['urgency'], reverse=True)
         
         # Calculate layout
-        width = 900  # Full width for better visibility
-        height = 600  # Full height for better visibility
+        width = 900
+        height = 600
         
-        # Generate SVG
-        return self._generate_circle_svg(items_sorted, item_type, width, height)
+        # Generate SVG and wrap it in Streamlit HTML component
+        svg_content = self._generate_circle_svg(items_sorted, item_type, width, height)
+        
+        # Wrap SVG in HTML with necessary styling and scripts
+        html_content = f"""
+            <div style="position: relative;">
+                <style>
+                    .circle-popup {{
+                        display: none;
+                        position: absolute;
+                        background: white;
+                        border: 1px solid #ccc;
+                        border-radius: 5px;
+                        padding: 10px;
+                        max-width: 300px;
+                        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                        z-index: 1000;
+                    }}
+                    .circle-group {{
+                        cursor: pointer;
+                    }}
+                    .circle-text {{
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                        display: -webkit-box;
+                        -webkit-line-clamp: 3;
+                        -webkit-box-orient: vertical;
+                    }}
+                </style>
+                {svg_content}
+                <script>
+                    // Wait for the DOM to be fully loaded
+                    document.addEventListener('DOMContentLoaded', function() {{
+                        // Get all circle groups
+                        const circles = document.querySelectorAll('.circle-group');
+                        const popups = document.querySelectorAll('.circle-popup');
+                        
+                        // Add click handlers to all circles
+                        circles.forEach((circle, index) => {{
+                            circle.addEventListener('click', function(e) {{
+                                e.stopPropagation();
+                                
+                                // Hide all popups first
+                                popups.forEach(p => p.style.display = 'none');
+                                
+                                // Show clicked circle's popup
+                                const popup = document.getElementById(`popup-${{index}}`);
+                                if (popup) {{
+                                    popup.style.display = 'block';
+                                    
+                                    // Position popup near the click
+                                    const rect = circle.getBoundingClientRect();
+                                    popup.style.left = (e.clientX - rect.left + 10) + 'px';
+                                    popup.style.top = (e.clientY - rect.top + 10) + 'px';
+                                }}
+                            }});
+                        }});
+                        
+                        // Close popup when clicking outside
+                        document.addEventListener('click', function(e) {{
+                            if (!e.target.closest('.circle-group')) {{
+                                popups.forEach(popup => popup.style.display = 'none');
+                            }}
+                        }});
+                    }});
+                </script>
+            </div>
+        """
+        
+        # Use Streamlit's HTML component to render
+        st.components.v1.html(html_content, height=height, scrolling=False)
 
     def _generate_circle_svg(self, items, item_type, width, height):
-        """Generate SVG content for the circle visualization"""
+        """Generate SVG content for the circle visualization with popup functionality"""
         output = []
+        
         output.append(f'''
             <svg xmlns="http://www.w3.org/2000/svg" 
                 width="{width}" height="{height}"
@@ -418,17 +548,17 @@ class CircleVisualizer(BaseVisualizer):
             </defs>
         ''')
 
-        # Calculate positions in a packed layout
+        # Calculate positions
         positions = self._calculate_packed_positions(items, width, height)
 
-        # Draw circles
-        for item, pos in zip(items, positions):
-            radius = self.base_radius * (item['urgency'] / 50)  # Scale radius by urgency
+        # Draw circles with truncated text and popup functionality
+        for i, (item, pos) in enumerate(zip(items, positions)):
+            radius = self.base_radius * (item['urgency'] / 50)
             x, y = pos
             
-            # Create circle with text
+            # Create circle with truncated text
             output.append(f'''
-                <g transform="translate({x},{y})" filter="url(#shadow)">
+                <g transform="translate({x},{y})" class="circle-group" filter="url(#shadow)">
                     <circle r="{radius}"
                            fill="{self.colors[item_type]}"
                            stroke="#666"
@@ -444,14 +574,21 @@ class CircleVisualizer(BaseVisualizer):
                                     text-align: center;
                                     font-family: Arial;
                                     font-size: {max(12, radius/4)}px;
-                                    overflow: hidden;
                                     padding: 5px;">
-                            <div>
+                            <div class="circle-text">
                                 {item[item_type]}
                             </div>
                         </div>
                     </foreignObject>
                 </g>
+                
+                <foreignObject x="0" y="0" width="{width}" height="{height}">
+                    <div xmlns="http://www.w3.org/1999/xhtml">
+                        <div id="popup-{i}" class="circle-popup">
+                            {item[item_type]}
+                        </div>
+                    </div>
+                </foreignObject>
             ''')
 
         output.append('</svg>')
@@ -464,10 +601,8 @@ class CircleVisualizer(BaseVisualizer):
         center_y = height / 2
         
         if len(items) == 1:
-            # Single item centered
             positions.append((center_x, center_y))
         elif len(items) <= 3:
-            # Small number of items in a triangle
             angle_step = 2 * math.pi / len(items)
             radius = min(width, height) / 4
             for i in range(len(items)):
@@ -476,7 +611,6 @@ class CircleVisualizer(BaseVisualizer):
                 y = center_y + radius * math.sin(angle)
                 positions.append((x, y))
         else:
-            # Multiple items in a circular layout
             angle_step = 2 * math.pi / len(items)
             radius = min(width, height) / 3
             for i in range(len(items)):

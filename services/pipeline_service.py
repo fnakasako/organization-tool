@@ -93,18 +93,18 @@ class PipelineService:
             return True
         return False
 
-    def add_todo(self, title, details, category, importance):
-        """Add a new todo item"""
-        if title and details and category:
+    def add_todo(self, title, details, categories, importance):
+        """Add a new todo item with multiple categories"""
+        if title and details and categories:
             new_todo = pd.DataFrame({
                 'title': [title],
                 'details': [details],
-                'category': [category],
+                'categories': [categories],  # Now accepts a list of categories
                 'importance': [importance],
                 'date_added': [datetime.now()]
             })
             if 'todos_df' not in self.st.session_state:
-                self.st.session_state.todos_df = pd.DataFrame(columns=['title', 'details', 'category', 'importance', 'date_added'])
+                self.st.session_state.todos_df = pd.DataFrame(columns=['title', 'details', 'categories', 'importance', 'date_added'])
             self.st.session_state.todos_df = pd.concat(
                 [self.st.session_state.todos_df, new_todo],
                 ignore_index=True
@@ -112,7 +112,7 @@ class PipelineService:
             return True
         return False
 
-    def update_todo(self, old_title, new_title=None, new_details=None, new_category=None, new_importance=None):
+    def update_todo(self, old_title, new_title=None, new_details=None, new_categories=None, new_importance=None):
         """Update a todo item"""
         if old_title:
             mask = self.st.session_state.todos_df['title'] == old_title
@@ -120,8 +120,8 @@ class PipelineService:
                 self.st.session_state.todos_df.loc[mask, 'title'] = new_title
             if new_details:
                 self.st.session_state.todos_df.loc[mask, 'details'] = new_details
-            if new_category:
-                self.st.session_state.todos_df.loc[mask, 'category'] = new_category
+            if new_categories:
+                self.st.session_state.todos_df.loc[mask, 'categories'] = [new_categories]  # Wrap in list since it's a list column
             if new_importance is not None:
                 self.st.session_state.todos_df.loc[mask, 'importance'] = new_importance
             # Re-sort by importance
